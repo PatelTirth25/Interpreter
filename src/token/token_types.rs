@@ -1,10 +1,10 @@
-#[derive(Debug, Clone)]
-pub enum Token_Type {
+#[derive(Debug, Clone, PartialEq)]
+pub enum TokenType {
     // Single-character tokens.
-    LEFT_PAREN,
-    RIGHT_PAREN,
-    LEFT_BRACE,
-    RIGHT_BRACE,
+    LEFTPAREN,
+    RIGHTPAREN,
+    LEFTBRACE,
+    RIGHTBRACE,
     COMMA,
     DOT,
     MINUS,
@@ -15,13 +15,13 @@ pub enum Token_Type {
 
     // One or two character tokens.
     BANG,
-    BANG_EQUAL,
+    BANGEQUAL,
     EQUAL,
-    EQUAL_EQUAL,
+    EQUALEQUAL,
     GREATER,
-    GREATER_EQUAL,
+    GREATEREQUAL,
     LESS,
-    LESS_EQUAL,
+    LESSEQUAL,
 
     // Literals.
     IDENTIFIER,

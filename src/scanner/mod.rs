@@ -1,6 +1,9 @@
-use std::{collections::HashMap, process::exit};
+use std::collections::HashMap;
 
-use crate::token::{token_types::Token_Type, Literal, Token};
+use crate::{
+    report_error,
+    token::{token_types::TokenType, Literal, Token},
+};
 
 pub struct Scanner<'a> {
     source: String,
@@ -8,7 +11,7 @@ pub struct Scanner<'a> {
     start: usize,
     current: usize,
     line: usize,
-    keywords: HashMap<&'a str, Token_Type>,
+    keywords: HashMap<&'a str, TokenType>,
 }
 
 impl<'a> Scanner<'a> {
@@ -20,22 +23,22 @@ impl<'a> Scanner<'a> {
             current: 0,
             line: 1,
             keywords: HashMap::from([
-                ("and", Token_Type::AND),
-                ("class", Token_Type::CLASS),
-                ("else", Token_Type::ELSE),
-                ("false", Token_Type::FALSE),
-                ("for", Token_Type::FOR),
-                ("fun", Token_Type::FUN),
-                ("if", Token_Type::IF),
-                ("nil", Token_Type::NIL),
-                ("or", Token_Type::OR),
-                ("print", Token_Type::PRINT),
-                ("return", Token_Type::RETURN),
-                ("super", Token_Type::SUPER),
-                ("this", Token_Type::THIS),
-                ("true", Token_Type::TRUE),
-                ("var", Token_Type::VAR),
-                ("while", Token_Type::WHILE),
+                ("and", TokenType::AND),
+                ("class", TokenType::CLASS),
+                ("else", TokenType::ELSE),
+                ("false", TokenType::FALSE),
+                ("for", TokenType::FOR),
+                ("fun", TokenType::FUN),
+                ("if", TokenType::IF),
+                ("nil", TokenType::NIL),
+                ("or", TokenType::OR),
+                ("print", TokenType::PRINT),
+                ("return", TokenType::RETURN),
+                ("super", TokenType::SUPER),
+                ("this", TokenType::THIS),
+                ("true", TokenType::TRUE),
+                ("var", TokenType::VAR),
+                ("while", TokenType::WHILE),
             ]),
         }
     }
@@ -43,11 +46,11 @@ impl<'a> Scanner<'a> {
     pub fn scan_tokens(&mut self) -> Vec<Token> {
         while !self.is_end() {
             self.start = self.current;
-            self.scan_tokens();
+            self.scan_token();
         }
 
         self.tokens.push(Token::new(
-            Token_Type::EOF,
+            TokenType::EOF,
             "".to_string(),
             Literal::Nil,
             self.line.try_into().unwrap(),
@@ -60,32 +63,32 @@ impl<'a> Scanner<'a> {
 
         match c {
             Some(c) => match c {
-                '(' => self.add_token(Token_Type::LEFT_PAREN, Literal::Nil),
-                ')' => self.add_token(Token_Type::RIGHT_PAREN, Literal::Nil),
-                '{' => self.add_token(Token_Type::LEFT_BRACE, Literal::Nil),
-                '}' => self.add_token(Token_Type::RIGHT_BRACE, Literal::Nil),
-                ',' => self.add_token(Token_Type::COMMA, Literal::Nil),
-                '.' => self.add_token(Token_Type::DOT, Literal::Nil),
-                '-' => self.add_token(Token_Type::MINUS, Literal::Nil),
-                '+' => self.add_token(Token_Type::PLUS, Literal::Nil),
-                ';' => self.add_token(Token_Type::SEMICOLON, Literal::Nil),
-                '*' => self.add_token(Token_Type::STAR, Literal::Nil),
+                '(' => self.add_token(TokenType::LEFTPAREN, Literal::Nil),
+                ')' => self.add_token(TokenType::RIGHTPAREN, Literal::Nil),
+                '{' => self.add_token(TokenType::LEFTBRACE, Literal::Nil),
+                '}' => self.add_token(TokenType::RIGHTBRACE, Literal::Nil),
+                ',' => self.add_token(TokenType::COMMA, Literal::Nil),
+                '.' => self.add_token(TokenType::DOT, Literal::Nil),
+                '-' => self.add_token(TokenType::MINUS, Literal::Nil),
+                '+' => self.add_token(TokenType::PLUS, Literal::Nil),
+                ';' => self.add_token(TokenType::SEMICOLON, Literal::Nil),
+                '*' => self.add_token(TokenType::STAR, Literal::Nil),
                 '/' => {
                     if self.match_char('/') {
                         while self.peek() != Some('\n') && !self.is_end() {
                             self.next();
                         }
                     } else {
-                        self.add_token(Token_Type::SLASH, Literal::Nil)
+                        self.add_token(TokenType::SLASH, Literal::Nil)
                     }
                 }
                 '!' => {
                     let p = self.match_char('=');
                     self.add_token(
                         if let true = p {
-                            Token_Type::BANG_EQUAL
+                            TokenType::BANGEQUAL
                         } else {
-                            Token_Type::BANG
+                            TokenType::BANG
                         },
                         Literal::Nil,
                     )
@@ -95,9 +98,9 @@ impl<'a> Scanner<'a> {
                     let p = self.match_char('=');
                     self.add_token(
                         if let true = p {
-                            Token_Type::LESS_EQUAL
+                            TokenType::LESSEQUAL
                         } else {
-                            Token_Type::LESS
+                            TokenType::LESS
                         },
                         Literal::Nil,
                     )
@@ -107,9 +110,9 @@ impl<'a> Scanner<'a> {
                     let p = self.match_char('=');
                     self.add_token(
                         if let true = p {
-                            Token_Type::GREATER_EQUAL
+                            TokenType::GREATEREQUAL
                         } else {
-                            Token_Type::GREATER
+                            TokenType::GREATER
                         },
                         Literal::Nil,
                     )
@@ -119,23 +122,16 @@ impl<'a> Scanner<'a> {
                     let p = self.match_char('=');
                     self.add_token(
                         if let true = p {
-                            Token_Type::EQUAL_EQUAL
+                            TokenType::EQUALEQUAL
                         } else {
-                            Token_Type::EQUAL
+                            TokenType::EQUAL
                         },
                         Literal::Nil,
                     )
                 }
 
-                'o' => {
-                    let p = self.match_char('r');
-                    self.add_token(Token_Type::OR, Literal::Nil);
-                }
-
                 '\n' => self.line += 1,
-                '\t' => {}
-                '\r' => {}
-                ' ' => {}
+                '\t' | '\r' | ' ' => {}
                 '"' => self.string(),
 
                 _ => {
@@ -144,11 +140,11 @@ impl<'a> Scanner<'a> {
                     } else if Scanner::is_alpha(c) {
                         self.identifier()
                     } else {
-                        self.report_error("Unexpected character")
+                        report_error(&self.tokens[self.tokens.len() - 1], "Unexpected character.");
                     }
                 }
             },
-            None => self.report_error("Character not found"),
+            None => report_error(&self.tokens[self.tokens.len() - 1], "Character not found."),
         }
     }
 
@@ -192,18 +188,13 @@ impl<'a> Scanner<'a> {
         self.current >= self.source.len()
     }
 
-    fn add_token(&mut self, token_type: Token_Type, literal: Literal) {
+    fn add_token(&mut self, token_type: TokenType, literal: Literal) {
         self.tokens.push(Token::new(
             token_type,
             self.source[self.start..self.current].to_string(),
             literal,
             self.line.try_into().unwrap(),
         ));
-    }
-
-    fn report_error(&self, message: &str) {
-        println!("Line: {}, Error: {}", self.line, message);
-        exit(1);
     }
 
     fn string(&mut self) {
@@ -214,13 +205,13 @@ impl<'a> Scanner<'a> {
             self.next();
         }
         if self.is_end() {
-            self.report_error("Unterminated string.");
+            report_error(&self.tokens[self.tokens.len() - 1], "Unterminated string.");
             return;
         }
         self.next();
         let value = self.source[self.start + 1..self.current - 1].to_string();
         println!("Value from string: {}", value);
-        self.add_token(Token_Type::STRING, Literal::String(value));
+        self.add_token(TokenType::STRING, Literal::String(value));
     }
 
     fn number(&mut self) {
@@ -234,7 +225,7 @@ impl<'a> Scanner<'a> {
             }
         }
         let value = self.source[self.start..self.current].to_string();
-        self.add_token(Token_Type::NUMBER, Literal::Number(value.parse().unwrap()));
+        self.add_token(TokenType::NUMBER, Literal::Number(value.parse().unwrap()));
     }
 
     fn identifier(&mut self) {
@@ -246,7 +237,7 @@ impl<'a> Scanner<'a> {
         let token = if let Some(token) = self.keywords.get(value) {
             token.to_owned()
         } else {
-            Token_Type::IDENTIFIER
+            TokenType::IDENTIFIER
         };
         self.add_token(token, Literal::Nil);
     }

@@ -1,6 +1,6 @@
 pub mod token_types;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
     Number(f64),
     String(String),
@@ -8,17 +8,17 @@ pub enum Literal {
     Nil,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Token {
-    token_type: token_types::Token_Type,
-    lexeme: String,
-    literal: Literal,
-    line: u32,
+    pub token_type: token_types::TokenType,
+    pub lexeme: String,
+    pub literal: Literal,
+    pub line: u32,
 }
 
 impl Token {
     pub fn new(
-        token_type: token_types::Token_Type,
+        token_type: token_types::TokenType,
         lexeme: String,
         literal: Literal,
         line: u32,
