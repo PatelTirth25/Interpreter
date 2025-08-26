@@ -1,17 +1,16 @@
 mod ast;
+mod error;
+mod interpreter;
+mod object;
 mod parser;
 mod scanner;
 mod token;
 
-use std::{
-    env::args,
-    fs::read_to_string,
-    io::{self},
-    process::exit,
-};
+use std::{env::args, fs::read_to_string};
 
 use ast::ast_print;
-use token::{token_types::TokenType, Token};
+use error::NZErrors;
+use interpreter::Interpreter;
 
 fn main() {
     let args = args().collect::<Vec<String>>();
@@ -19,30 +18,38 @@ fn main() {
         eprintln!("Usage: cargo run -- (.nz file)");
         return;
     }
-    let buffer = read_file(&args[1]).expect("Error Reading file!");
+    let buffer = read_file(&args[1]).map_err(|e| e.report_error()).unwrap();
     println!("Content: {:?}", buffer);
 
-    let tokens = scanner::Scanner::new(buffer).scan_tokens();
+    let tokens = scanner::Scanner::new(buffer)
+        .scan_tokens()
+        .map_err(|e| e.report_error())
+        .unwrap();
     println!("Tokens: {:#?}", tokens);
 
     let mut parser = parser::Parser::new(tokens);
-    let expr = parser.parse();
+    let expr = parser.parse().map_err(|e| e.report_error()).unwrap();
     println!("Expr: {:#?}", expr);
 
     let mut asd = ast_print::AstPrint::new();
-    println!("Ast: {}", asd.print(&expr.unwrap()));
+    println!("Ast: {}", asd.print(&expr));
+
+    // ast::ast_generator::AstGenerator::define_ast(
+    //     "/home/tirth/code/interpreter/src/",
+    //     "ast",
+    //     &["Expr"],
+    // )
+    // .expect("Ast Generator Error");
+
+    let mut interpreter = Interpreter;
+    let result = interpreter
+        .interpret(&expr)
+        .map_err(|e| e.report_error())
+        .unwrap();
+    println!("Result: {}", result);
 }
 
-fn read_file(path: &str) -> Result<String, io::Error> {
-    let buffer = read_to_string(path)?;
-    Ok(buffer)
-}
-
-pub fn report_error(token: &Token, message: &str) {
-    if token.token_type == TokenType::EOF {
-        println!("Error at end: {}", message);
-    } else {
-        println!("Error at '{}': {}", token.line, message);
-    }
-    exit(1);
+fn read_file(path: &str) -> Result<String, NZErrors> {
+    let buffer = read_to_string(path).map_err(|e| NZErrors::FileReadError(e.to_string()));
+    buffer
 }

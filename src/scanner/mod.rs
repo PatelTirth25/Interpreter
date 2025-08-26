@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    report_error,
+    error::NZErrors,
     token::{token_types::TokenType, Literal, Token},
 };
 
@@ -43,10 +43,10 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    pub fn scan_tokens(&mut self) -> Vec<Token> {
+    pub fn scan_tokens(&mut self) -> Result<Vec<Token>, NZErrors> {
         while !self.is_end() {
             self.start = self.current;
-            self.scan_token();
+            self.scan_token()?;
         }
 
         self.tokens.push(Token::new(
@@ -55,10 +55,10 @@ impl<'a> Scanner<'a> {
             Literal::Nil,
             self.line.try_into().unwrap(),
         ));
-        self.tokens.clone()
+        Ok(self.tokens.clone())
     }
 
-    fn scan_token(&mut self) {
+    fn scan_token(&mut self) -> Result<(), NZErrors> {
         let c = self.next();
 
         match c {
@@ -140,12 +140,21 @@ impl<'a> Scanner<'a> {
                     } else if Scanner::is_alpha(c) {
                         self.identifier()
                     } else {
-                        report_error(&self.tokens[self.tokens.len() - 1], "Unexpected character.");
+                        return Err(NZErrors::ParseError(
+                            self.tokens[self.tokens.len() - 1].clone(),
+                            "Unexpected character.".to_string(),
+                        ));
                     }
                 }
             },
-            None => report_error(&self.tokens[self.tokens.len() - 1], "Character not found."),
+            None => {
+                return Err(NZErrors::ParseError(
+                    self.tokens[self.tokens.len() - 1].clone(),
+                    "Unexpected end of input.".to_string(),
+                ))
+            }
         }
+        Ok(())
     }
 
     fn is_alpha(c: char) -> bool {
@@ -205,7 +214,11 @@ impl<'a> Scanner<'a> {
             self.next();
         }
         if self.is_end() {
-            report_error(&self.tokens[self.tokens.len() - 1], "Unterminated string.");
+            NZErrors::ParseError(
+                self.tokens[self.tokens.len() - 1].clone(),
+                "Unterminated string.".to_string(),
+            )
+            .report_error();
             return;
         }
         self.next();

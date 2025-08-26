@@ -1,6 +1,6 @@
 use crate::{
     ast::Expr,
-    report_error,
+    error::NZErrors,
     token::{token_types::TokenType, Literal, Token},
 };
 
@@ -13,19 +13,19 @@ impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
         Self { tokens, current: 0 }
     }
-    pub fn parse(&mut self) -> Option<Expr> {
+    pub fn parse(&mut self) -> Result<Expr, NZErrors> {
         self.equality()
     }
-    fn equality(&mut self) -> Option<Expr> {
+    fn equality(&mut self) -> Result<Expr, NZErrors> {
         let mut expr = self.comparison()?;
         while self.match_token(&[TokenType::BANGEQUAL, TokenType::EQUALEQUAL]) {
             let operator = self.previous();
             let right = self.comparison()?;
             expr = Expr::Binary(Box::new(expr), operator, Box::new(right));
         }
-        Some(expr)
+        Ok(expr)
     }
-    fn comparison(&mut self) -> Option<Expr> {
+    fn comparison(&mut self) -> Result<Expr, NZErrors> {
         let mut expr = self.term()?;
 
         while self.match_token(&[
@@ -38,9 +38,9 @@ impl Parser {
             let right = self.term()?;
             expr = Expr::Binary(Box::new(expr), operator, Box::new(right));
         }
-        Some(expr)
+        Ok(expr)
     }
-    fn term(&mut self) -> Option<Expr> {
+    fn term(&mut self) -> Result<Expr, NZErrors> {
         let mut expr = self.factor()?;
 
         while self.match_token(&[TokenType::MINUS, TokenType::PLUS]) {
@@ -48,9 +48,9 @@ impl Parser {
             let right = self.factor()?;
             expr = Expr::Binary(Box::new(expr), operator, Box::new(right));
         }
-        Some(expr)
+        Ok(expr)
     }
-    fn factor(&mut self) -> Option<Expr> {
+    fn factor(&mut self) -> Result<Expr, NZErrors> {
         let mut expr = self.unary()?;
 
         while self.match_token(&[TokenType::SLASH, TokenType::STAR]) {
@@ -58,36 +58,35 @@ impl Parser {
             let right = self.unary()?;
             expr = Expr::Binary(Box::new(expr), operator, Box::new(right));
         }
-        Some(expr)
+        Ok(expr)
     }
 
-    fn unary(&mut self) -> Option<Expr> {
+    fn unary(&mut self) -> Result<Expr, NZErrors> {
         if self.match_token(&[TokenType::BANG, TokenType::MINUS]) {
             let operator = self.previous();
             let right = self.unary()?;
-            return Some(Expr::Unary(operator, Box::new(right)));
+            return Ok(Expr::Unary(operator, Box::new(right)));
         }
         self.primary()
     }
-    fn primary(&mut self) -> Option<Expr> {
+    fn primary(&mut self) -> Result<Expr, NZErrors> {
         if self.match_token(&[TokenType::FALSE]) {
-            return Some(Expr::Literal(Literal::Boolean(false)));
+            return Ok(Expr::Literal(Literal::Boolean(false)));
         } else if self.match_token(&[TokenType::TRUE]) {
-            return Some(Expr::Literal(Literal::Boolean(true)));
+            return Ok(Expr::Literal(Literal::Boolean(true)));
         } else if self.match_token(&[TokenType::NIL]) {
-            return Some(Expr::Literal(Literal::Nil));
+            return Ok(Expr::Literal(Literal::Nil));
         } else if self.match_token(&[TokenType::NUMBER, TokenType::STRING]) {
-            return Some(Expr::Literal(self.previous().literal));
+            return Ok(Expr::Literal(self.previous().literal));
         } else if self.match_token(&[TokenType::LEFTPAREN]) {
             let expr = self.parse()?;
             self.consume(TokenType::RIGHTPAREN, "Expect ')' after expression.");
-            return Some(Expr::Grouping(Box::new(expr)));
+            return Ok(Expr::Grouping(Box::new(expr)));
         }
-        report_error(
-            &self.peek(),
-            format!("Expect expression, got {}", &self.peek().lexeme).as_str(),
-        );
-        None
+        Err(NZErrors::ParseError(
+            self.peek(),
+            format!("Expect expression, got {}", &self.peek().lexeme),
+        ))
     }
     fn consume(&mut self, token_type: TokenType, message: &str) -> Option<Token> {
         if self.check(&token_type) {
@@ -99,9 +98,9 @@ impl Parser {
     }
     fn error(token: Token, message: &str) {
         if token.token_type == TokenType::EOF {
-            report_error(&token, "Expect end of expression.");
+            NZErrors::ParseError(token, message.to_string());
         } else {
-            report_error(&token, message);
+            NZErrors::ParseError(token, message.to_string());
         }
     }
     fn match_token(&mut self, expected: &[TokenType]) -> bool {
