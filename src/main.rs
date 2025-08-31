@@ -1,4 +1,5 @@
 mod ast;
+mod environment;
 mod error;
 mod interpreter;
 mod object;
@@ -8,7 +9,6 @@ mod token;
 
 use std::{env::args, fs::read_to_string};
 
-use ast::ast_print;
 use error::NZErrors;
 use interpreter::Interpreter;
 
@@ -31,8 +31,14 @@ fn main() {
     let expr = parser.parse().map_err(|e| e.report_error()).unwrap();
     println!("Expr: {:#?}", expr);
 
-    let mut asd = ast_print::AstPrint::new();
-    println!("Ast: {}", asd.print(&expr));
+    let mut interpreter = Interpreter::new();
+    interpreter
+        .interpret(&expr)
+        .map_err(|e| e.report_error())
+        .unwrap();
+
+    // let mut asd = ast_print::AstPrint::new();
+    // println!("Ast: {}", asd.print(&expr));
 
     // ast::ast_generator::AstGenerator::define_ast(
     //     "/home/tirth/code/interpreter/src/",
@@ -40,13 +46,6 @@ fn main() {
     //     &["Expr"],
     // )
     // .expect("Ast Generator Error");
-
-    let mut interpreter = Interpreter;
-    let result = interpreter
-        .interpret(&expr)
-        .map_err(|e| e.report_error())
-        .unwrap();
-    println!("Result: {}", result);
 }
 
 fn read_file(path: &str) -> Result<String, NZErrors> {

@@ -1,6 +1,6 @@
 use crate::token::Token;
 
-use super::{Expr, Literal, Visitor};
+use super::{Expr, ExprVisitor, Literal};
 
 pub struct AstPrint;
 
@@ -22,7 +22,7 @@ impl AstPrint {
     }
 }
 
-impl Visitor<String> for AstPrint {
+impl ExprVisitor<String> for AstPrint {
     fn visit_binary_expr(&mut self, left: &Expr, op: &Token, right: &Expr) -> String {
         self.parenthesize(&op.lexeme, &[left, right])
     }
@@ -42,5 +42,13 @@ impl Visitor<String> for AstPrint {
 
     fn visit_unary_expr(&mut self, op: &Token, expr: &Expr) -> String {
         self.parenthesize(&op.lexeme, &[expr])
+    }
+
+    fn visit_assign_expr(&mut self, name: &Token, value: &Expr) -> String {
+        self.parenthesize(&name.lexeme, &[value])
+    }
+
+    fn visit_variable_expr(&mut self, name: &Token) -> String {
+        name.lexeme.to_string()
     }
 }

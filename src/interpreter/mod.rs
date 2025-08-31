@@ -1,22 +1,51 @@
+use std::{cell::RefCell, rc::Rc};
+
 use crate::{
-    ast::{Expr, Visitor},
+    ast::{Expr, ExprVisitor, Stmt, StmtVisitor},
+    environment::Environment,
     error::NZErrors,
     object::Object,
     token::{token_types::TokenType, Literal, Token},
 };
 
-pub struct Interpreter;
+pub struct Interpreter {
+    pub environment: Rc<RefCell<Environment>>,
+}
 
 impl Interpreter {
-    pub fn interpret(&mut self, expr: &Expr) -> Result<String, NZErrors> {
-        match self.evaluate(expr) {
-            Ok(obj) => Ok(obj.to_string()),
-            Err(err) => Err(err),
+    pub fn new() -> Self {
+        Self {
+            environment: Environment::new(None),
         }
     }
+    pub fn interpret(&mut self, stmplist: &[Stmt]) -> Result<(), NZErrors> {
+        for stmt in stmplist {
+            self.execute(stmt)?;
+        }
+        Ok(())
+    }
+    fn execute(&mut self, stmt: &Stmt) -> Result<(), NZErrors> {
+        stmt.accept(self)
+    }
+
+    fn execute_block(
+        &mut self,
+        stmtlist: &[Stmt],
+        environment: Rc<RefCell<Environment>>,
+    ) -> Result<(), NZErrors> {
+        let previous = Rc::clone(&self.environment);
+        self.environment = environment;
+        for stmt in stmtlist {
+            self.execute(stmt)?;
+        }
+        self.environment = previous;
+        Ok(())
+    }
+
     fn evaluate(&mut self, expr: &Expr) -> Result<Object, NZErrors> {
         expr.accept(self)
     }
+
     fn istrusthy(&self, obj: &Object) -> bool {
         match obj {
             Object::Boolean(b) => *b,
@@ -138,7 +167,7 @@ impl Interpreter {
     }
 }
 
-impl Visitor<Result<Object, NZErrors>> for Interpreter {
+impl ExprVisitor<Result<Object, NZErrors>> for Interpreter {
     fn visit_binary_expr(
         &mut self,
         left: &Expr,
@@ -199,5 +228,46 @@ impl Visitor<Result<Object, NZErrors>> for Interpreter {
                 ))
             }
         }
+    }
+
+    fn visit_variable_expr(&mut self, name: &Token) -> Result<Object, NZErrors> {
+        self.environment.borrow().get(name)
+    }
+
+    fn visit_assign_expr(&mut self, name: &Token, value: &Expr) -> Result<Object, NZErrors> {
+        let value = self.evaluate(value)?;
+        self.environment.borrow_mut().assign(name, value.clone())?;
+        Ok(value)
+    }
+}
+
+impl StmtVisitor<Result<(), NZErrors>> for Interpreter {
+    fn visit_expression_stmt(&mut self, expr: &Expr) -> Result<(), NZErrors> {
+        self.evaluate(expr)?;
+        Ok(())
+    }
+
+    fn visit_print_stmt(&mut self, expr: &Expr) -> Result<(), NZErrors> {
+        let obj = self.evaluate(expr)?;
+        println!("{}", obj.to_string());
+        Ok(())
+    }
+
+    fn visit_var_stmt(&mut self, name: &Token, initializer: &Option<Expr>) -> Result<(), NZErrors> {
+        let value = match initializer {
+            Some(expr) => self.evaluate(expr)?,
+            None => Object::Nill,
+        };
+        self.environment
+            .borrow_mut()
+            .define(name.lexeme.clone(), value);
+        Ok(())
+    }
+
+    fn visit_block_stmt(&mut self, statements: &[Stmt]) -> Result<(), NZErrors> {
+        self.execute_block(
+            statements,
+            Environment::new(Some(Rc::clone(&self.environment))),
+        )
     }
 }

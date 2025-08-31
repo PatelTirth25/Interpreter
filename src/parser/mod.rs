@@ -1,5 +1,5 @@
 use crate::{
-    ast::Expr,
+    ast::{Expr, Stmt},
     error::NZErrors,
     token::{token_types::TokenType, Literal, Token},
 };
@@ -13,9 +13,88 @@ impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
         Self { tokens, current: 0 }
     }
-    pub fn parse(&mut self) -> Result<Expr, NZErrors> {
-        self.equality()
+    pub fn parse(&mut self) -> Result<Vec<Stmt>, NZErrors> {
+        let mut statements = Vec::new();
+
+        while !self.is_at_end() {
+            statements.push(self.declaration()?);
+        }
+        Ok(statements)
     }
+
+    fn declaration(&mut self) -> Result<Stmt, NZErrors> {
+        if self.match_token(&[TokenType::VAR]) {
+            return self.var_declaration();
+        }
+        self.statement()
+    }
+
+    fn var_declaration(&mut self) -> Result<Stmt, NZErrors> {
+        let name = self.consume(TokenType::IDENTIFIER, "Expect variable name.")?;
+        let mut initializer = None;
+        if self.match_token(&[TokenType::EQUAL]) {
+            initializer = Some(self.equality()?);
+        }
+        self.consume(
+            TokenType::SEMICOLON,
+            "Expect ';' after variable declaration.",
+        )?;
+        Ok(Stmt::Var { name, initializer })
+    }
+
+    fn statement(&mut self) -> Result<Stmt, NZErrors> {
+        if self.match_token(&[TokenType::PRINT]) {
+            return self.print_statement();
+        }
+        if self.match_token(&[TokenType::LEFTBRACE]) {
+            return self.block();
+        }
+        self.expression_statement()
+    }
+
+    fn block(&mut self) -> Result<Stmt, NZErrors> {
+        let mut statements = Vec::new();
+        while !self.check(&TokenType::RIGHTBRACE) && !self.is_at_end() {
+            statements.push(self.declaration()?);
+        }
+        self.consume(TokenType::RIGHTBRACE, "Expect '}' after block.")?;
+        Ok(Stmt::Block { statements })
+    }
+
+    fn print_statement(&mut self) -> Result<Stmt, NZErrors> {
+        let value = self.expression()?;
+        self.consume(TokenType::SEMICOLON, "Expect ';' after value.")?;
+        Ok(Stmt::Print { expression: value })
+    }
+
+    fn expression_statement(&mut self) -> Result<Stmt, NZErrors> {
+        let expr = self.expression()?;
+        self.consume(TokenType::SEMICOLON, "Expect ';' after expression.")?;
+        Ok(Stmt::Expression { expression: expr })
+    }
+
+    fn expression(&mut self) -> Result<Expr, NZErrors> {
+        self.assignment()
+    }
+
+    fn assignment(&mut self) -> Result<Expr, NZErrors> {
+        let expr = self.equality()?;
+
+        if self.match_token(&[TokenType::EQUAL]) {
+            let equals = self.previous();
+            let value = self.assignment()?;
+
+            if let Expr::Variable(name) = expr {
+                return Ok(Expr::Assign(name, Box::new(value)));
+            }
+            return Err(NZErrors::ParseError(
+                equals,
+                "Invalid assignment target.".to_string(),
+            ));
+        }
+        Ok(expr)
+    }
+
     fn equality(&mut self) -> Result<Expr, NZErrors> {
         let mut expr = self.comparison()?;
         while self.match_token(&[TokenType::BANGEQUAL, TokenType::EQUALEQUAL]) {
@@ -78,9 +157,11 @@ impl Parser {
             return Ok(Expr::Literal(Literal::Nil));
         } else if self.match_token(&[TokenType::NUMBER, TokenType::STRING]) {
             return Ok(Expr::Literal(self.previous().literal));
+        } else if self.match_token(&[TokenType::IDENTIFIER]) {
+            return Ok(Expr::Variable(self.previous()));
         } else if self.match_token(&[TokenType::LEFTPAREN]) {
-            let expr = self.parse()?;
-            self.consume(TokenType::RIGHTPAREN, "Expect ')' after expression.");
+            let expr = self.equality()?;
+            self.consume(TokenType::RIGHTPAREN, "Expect ')' after expression.")?;
             return Ok(Expr::Grouping(Box::new(expr)));
         }
         Err(NZErrors::ParseError(
@@ -88,19 +169,11 @@ impl Parser {
             format!("Expect expression, got {}", &self.peek().lexeme),
         ))
     }
-    fn consume(&mut self, token_type: TokenType, message: &str) -> Option<Token> {
+    fn consume(&mut self, token_type: TokenType, message: &str) -> Result<Token, NZErrors> {
         if self.check(&token_type) {
-            Some(self.next())
+            Ok(self.next())
         } else {
-            Self::error(self.peek(), message);
-            None
-        }
-    }
-    fn error(token: Token, message: &str) {
-        if token.token_type == TokenType::EOF {
-            NZErrors::ParseError(token, message.to_string());
-        } else {
-            NZErrors::ParseError(token, message.to_string());
+            Err(NZErrors::ParseError(self.peek(), message.to_string()))
         }
     }
     fn match_token(&mut self, expected: &[TokenType]) -> bool {
