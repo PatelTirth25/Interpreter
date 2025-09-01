@@ -49,7 +49,27 @@ impl Parser {
         if self.match_token(&[TokenType::LEFTBRACE]) {
             return self.block();
         }
+        if self.match_token(&[TokenType::IF]) {
+            return self.if_statement();
+        }
         self.expression_statement()
+    }
+
+    fn if_statement(&mut self) -> Result<Stmt, NZErrors> {
+        self.consume(TokenType::LEFTPAREN, "Expect '(' after 'if'.")?;
+        let condition = self.expression()?;
+        self.consume(TokenType::RIGHTPAREN, "Expect ')' after if condition.")?;
+        let then_branch = self.statement()?;
+        let else_branch = if self.match_token(&[TokenType::ELSE]) {
+            Some(Box::new(self.statement()?))
+        } else {
+            None
+        };
+        Ok(Stmt::If {
+            condition,
+            then_branch: Box::new(then_branch),
+            else_branch,
+        })
     }
 
     fn block(&mut self) -> Result<Stmt, NZErrors> {
@@ -78,7 +98,7 @@ impl Parser {
     }
 
     fn assignment(&mut self) -> Result<Expr, NZErrors> {
-        let expr = self.equality()?;
+        let expr = self.or()?;
 
         if self.match_token(&[TokenType::EQUAL]) {
             let equals = self.previous();
@@ -91,6 +111,28 @@ impl Parser {
                 equals,
                 "Invalid assignment target.".to_string(),
             ));
+        }
+        Ok(expr)
+    }
+
+    fn or(&mut self) -> Result<Expr, NZErrors> {
+        let mut expr = self.and()?;
+
+        while self.match_token(&[TokenType::OR]) {
+            let operator = self.previous();
+            let right = self.and()?;
+            expr = Expr::Logical(Box::new(expr), operator, Box::new(right));
+        }
+        Ok(expr)
+    }
+
+    fn and(&mut self) -> Result<Expr, NZErrors> {
+        let mut expr = self.equality()?;
+
+        while self.match_token(&[TokenType::AND]) {
+            let operator = self.previous();
+            let right = self.equality()?;
+            expr = Expr::Logical(Box::new(expr), operator, Box::new(right));
         }
         Ok(expr)
     }

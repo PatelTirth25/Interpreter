@@ -239,6 +239,25 @@ impl ExprVisitor<Result<Object, NZErrors>> for Interpreter {
         self.environment.borrow_mut().assign(name, value.clone())?;
         Ok(value)
     }
+
+    fn visit_logical_expr(
+        &mut self,
+        left: &Expr,
+        op: &Token,
+        right: &Expr,
+    ) -> Result<Object, NZErrors> {
+        let left = self.evaluate(left)?;
+        if op.token_type == TokenType::OR {
+            if self.istrusthy(&left) {
+                return Ok(left);
+            }
+        } else {
+            if !self.istrusthy(&left) {
+                return Ok(left);
+            }
+        }
+        self.evaluate(right)
+    }
 }
 
 impl StmtVisitor<Result<(), NZErrors>> for Interpreter {
@@ -269,5 +288,20 @@ impl StmtVisitor<Result<(), NZErrors>> for Interpreter {
             statements,
             Environment::new(Some(Rc::clone(&self.environment))),
         )
+    }
+
+    fn visit_if_stmt(
+        &mut self,
+        condition: &Expr,
+        then_branch: &Stmt,
+        else_branch: &Option<Box<Stmt>>,
+    ) -> Result<(), NZErrors> {
+        let eval = self.evaluate(condition)?;
+        if self.istrusthy(&eval) {
+            self.execute(then_branch)?;
+        } else if let Some(else_branch) = else_branch {
+            self.execute(else_branch)?;
+        }
+        Ok(())
     }
 }

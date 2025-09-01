@@ -20,3 +20,6 @@ var c = "global c";
 print a;
 print b;
 print c;
+
+print "hi" or 2; // "hi".
+print nil or "yes"; // "yes".
