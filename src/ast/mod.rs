@@ -34,10 +34,10 @@ pub enum Stmt {
         then_branch: Box<Stmt>,
         else_branch: Option<Box<Stmt>>,
     },
-    // While {
-    //     condition: Expr,
-    //     body: Box<Stmt>,
-    // },
+    While {
+        condition: Expr,
+        body: Box<Stmt>,
+    },
 }
 
 pub trait ExprVisitor<T> {
@@ -61,7 +61,7 @@ pub trait StmtVisitor<T> {
         then_branch: &Stmt,
         else_branch: &Option<Box<Stmt>>,
     ) -> T;
-    // fn visit_while_stmt(&mut self, condition: &Expr, body: &Stmt) -> T;
+    fn visit_while_stmt(&mut self, condition: &Expr, body: &Stmt) -> T;
 }
 
 impl Stmt {
@@ -76,7 +76,7 @@ impl Stmt {
                 then_branch,
                 else_branch,
             } => visitor.visit_if_stmt(condition, then_branch, else_branch),
-            // Stmt::While { condition, body } => visitor.visit_while_stmt(condition, body),
+            Stmt::While { condition, body } => visitor.visit_while_stmt(condition, body),
         }
     }
 }

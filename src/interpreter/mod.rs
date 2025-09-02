@@ -304,4 +304,13 @@ impl StmtVisitor<Result<(), NZErrors>> for Interpreter {
         }
         Ok(())
     }
+
+    fn visit_while_stmt(&mut self, condition: &Expr, body: &Stmt) -> Result<(), NZErrors> {
+        let mut eval = self.evaluate(condition)?;
+        while self.istrusthy(&eval) {
+            self.execute(body)?;
+            eval = self.evaluate(condition)?;
+        }
+        Ok(())
+    }
 }
