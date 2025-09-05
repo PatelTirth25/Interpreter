@@ -1,13 +1,16 @@
 use core::fmt;
+use std::rc::Rc;
 
-#[derive(Debug, Clone, PartialEq)]
+use crate::interpreter::loxcallable::LoxCallable;
+
+#[derive(Clone, Debug)]
 pub enum Object {
     // Class(Rc<RefCell<LoxClass>>),
-    // Callable(Function),
     // Instance(Rc<RefCell<LoxInstance>>),
     Number(f64),
     Boolean(bool),
     String(String),
+    Callable(Rc<dyn LoxCallable>),
     Nill,
 }
 
@@ -18,6 +21,7 @@ impl fmt::Display for Object {
             Object::Number(n) => write!(f, "{}", n),
             Object::Boolean(b) => write!(f, "{}", b),
             Object::String(s) => write!(f, "{}", s),
+            Object::Callable(c) => write!(f, "{}", c),
         }
     }
 }

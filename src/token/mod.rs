@@ -1,3 +1,5 @@
+use core::fmt;
+
 pub mod token_types;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -6,6 +8,17 @@ pub enum Literal {
     String(String),
     Boolean(bool),
     Nil,
+}
+
+impl fmt::Display for Literal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Literal::Number(n) => write!(f, "{}", n),
+            Literal::String(s) => write!(f, "{}", s),
+            Literal::Boolean(b) => write!(f, "{}", b),
+            Literal::Nil => write!(f, "nil"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -28,6 +41,15 @@ impl Token {
             lexeme,
             literal,
             line,
+        }
+    }
+
+    pub fn default() -> Token {
+        Token {
+            token_type: token_types::TokenType::EOF,
+            lexeme: String::new(),
+            literal: Literal::Nil,
+            line: 0,
         }
     }
 }

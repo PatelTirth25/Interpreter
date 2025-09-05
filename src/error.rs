@@ -1,12 +1,15 @@
 use std::process::exit;
 
-use crate::token::{token_types::TokenType, Token};
+use crate::{
+    object::Object,
+    token::{token_types::TokenType, Token},
+};
 
-#[derive(Debug)]
 pub enum NZErrors {
     ParseError(Token, String),
     RuntimeError(Token, String),
     FileReadError(String),
+    Return(Object),
 }
 
 fn print_error(errtype: &str, token: &Token, message: &str) {
@@ -27,6 +30,7 @@ impl NZErrors {
             NZErrors::ParseError(token, message) => print_error("Parse Error", token, message),
             NZErrors::RuntimeError(token, message) => print_error("Runtime Error", token, message),
             NZErrors::FileReadError(message) => println!("{}", message),
+            NZErrors::Return(_) => panic!("Return should never be reported as an error!"),
         }
     }
 }

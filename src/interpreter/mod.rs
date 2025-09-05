@@ -1,4 +1,10 @@
+mod clockfn;
+pub mod loxcallable;
+mod loxfunction;
 use std::{cell::RefCell, rc::Rc};
+
+use clockfn::ClockFn;
+use loxfunction::LoxFunction;
 
 use crate::{
     ast::{Expr, ExprVisitor, Stmt, StmtVisitor},
@@ -9,13 +15,21 @@ use crate::{
 };
 
 pub struct Interpreter {
-    pub environment: Rc<RefCell<Environment>>,
+    globals: Rc<RefCell<Environment>>,
+    environment: Rc<RefCell<Environment>>,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
+        let globals = Environment::new(None);
+
+        globals
+            .borrow_mut()
+            .define("clock".to_string(), Object::Callable(Rc::new(ClockFn)));
+
         Self {
-            environment: Environment::new(None),
+            environment: Rc::clone(&globals),
+            globals: Rc::clone(&globals),
         }
     }
     pub fn interpret(&mut self, stmplist: &[Stmt]) -> Result<(), NZErrors> {
@@ -35,11 +49,16 @@ impl Interpreter {
     ) -> Result<(), NZErrors> {
         let previous = Rc::clone(&self.environment);
         self.environment = environment;
-        for stmt in stmtlist {
-            self.execute(stmt)?;
-        }
+
+        let result = (|| {
+            for stmt in stmtlist {
+                self.execute(stmt)?;
+            }
+            Ok(())
+        })();
+
         self.environment = previous;
-        Ok(())
+        result
     }
 
     fn evaluate(&mut self, expr: &Expr) -> Result<Object, NZErrors> {
@@ -174,8 +193,8 @@ impl ExprVisitor<Result<Object, NZErrors>> for Interpreter {
         op: &Token,
         right: &Expr,
     ) -> Result<Object, NZErrors> {
-        let right = self.evaluate(right)?;
         let left = self.evaluate(left)?;
+        let right = self.evaluate(right)?;
 
         match op.token_type {
             TokenType::PLUS => self.isadd(&right, &left, op),
@@ -258,6 +277,40 @@ impl ExprVisitor<Result<Object, NZErrors>> for Interpreter {
         }
         self.evaluate(right)
     }
+
+    fn visit_call_expr(
+        &mut self,
+        callee: &Expr,
+        paren: &Token,
+        arguments: &[Expr],
+    ) -> Result<Object, NZErrors> {
+        let call = self.evaluate(callee)?;
+        let mut args = Vec::new();
+
+        for arg in arguments {
+            args.push(self.evaluate(arg)?);
+        }
+
+        if let Object::Callable(function) = call {
+            if args.len() != function.arity() {
+                return Err(NZErrors::RuntimeError(
+                    paren.clone(),
+                    format!(
+                        "Expected {} arguments but got {}.",
+                        function.arity(),
+                        args.len()
+                    ),
+                ));
+            }
+
+            return Ok(function.call(self, &args)?);
+        }
+
+        Err(NZErrors::RuntimeError(
+            paren.clone(),
+            "Can only call functions and classes.".to_string(),
+        ))
+    }
 }
 
 impl StmtVisitor<Result<(), NZErrors>> for Interpreter {
@@ -312,5 +365,35 @@ impl StmtVisitor<Result<(), NZErrors>> for Interpreter {
             eval = self.evaluate(condition)?;
         }
         Ok(())
+    }
+
+    fn visit_function_stmt(
+        &mut self,
+        name: &Token,
+        params: &[Token],
+        body: &[Stmt],
+    ) -> Result<(), NZErrors> {
+        let function = LoxFunction::new(
+            name.clone(),
+            params.to_vec(),
+            body.to_vec(),
+            self.environment.clone(),
+        );
+        self.environment
+            .borrow_mut()
+            .define(name.lexeme.clone(), Object::Callable(Rc::new(function)));
+        Ok(())
+    }
+
+    fn visit_return_stmt(
+        &mut self,
+        _keyword: &Token,
+        value: &Option<Expr>,
+    ) -> Result<(), NZErrors> {
+        let value = match value {
+            Some(expr) => self.evaluate(expr)?,
+            None => Object::Nill,
+        };
+        Err(NZErrors::Return(value))
     }
 }
