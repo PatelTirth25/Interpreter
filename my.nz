@@ -1,48 +1,19 @@
-//var a = 0;
-//var temp;
-//
-//if (a > 10000) {
-//    print a;
-//}
-//else print "a > 10000";
-//
-//for (var b = 1; a < 10000; b = temp + b) {
-//  print a;
-//  temp = a;
-//  a = b;
-//}
-//
-//var t = 1;
-//
-//while (t<10) {
-//  print t;
-//  t = t + 1;
-//}
-
-fun fib(n) {
-  if (n <= 1) return n;
-  return fib(n - 1) + fib(n - 2);
-}
-
-print fib(3);   // 2
-print fib(5);   // 5
-
-
-fun test(n) {
-  if (n <= 1) {
-    return 999;
+class A {
+  method() {
+    print "A method";
   }
-  return -1;
 }
 
-print test(1);
+class B < A {
+  method() {
+    print "B method";
+  }
 
+  test() {
+    super.method();
+  }
+}
 
-//fun count(n) {
-//    if (n == 0) return 0;
-//    return 10 + count(n - 1);
-//}
-//print count(10);
+class C < B {}
 
-//print 3-2;
-//print 4/2;
+C().test();

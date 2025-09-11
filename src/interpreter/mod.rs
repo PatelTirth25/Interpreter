@@ -1,9 +1,13 @@
 mod clockfn;
 pub mod loxcallable;
+pub mod loxclass;
 mod loxfunction;
-use std::{cell::RefCell, rc::Rc};
+pub mod loxinstance;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use clockfn::ClockFn;
+use loxcallable::LoxCallable;
+use loxclass::LoxClass;
 use loxfunction::LoxFunction;
 
 use crate::{
@@ -291,24 +295,113 @@ impl ExprVisitor<Result<Object, NZErrors>> for Interpreter {
             args.push(self.evaluate(arg)?);
         }
 
-        if let Object::Callable(function) = call {
-            if args.len() != function.arity() {
-                return Err(NZErrors::RuntimeError(
-                    paren.clone(),
-                    format!(
-                        "Expected {} arguments but got {}.",
-                        function.arity(),
-                        args.len()
-                    ),
-                ));
+        match call {
+            Object::Callable(function) => {
+                if args.len() != function.arity() {
+                    return Err(NZErrors::RuntimeError(
+                        paren.clone(),
+                        format!(
+                            "Expected {} arguments but got {}.",
+                            function.arity(),
+                            args.len()
+                        ),
+                    ));
+                }
+                function.call(self, &args)
             }
 
-            return Ok(function.call(self, &args)?);
+            Object::Class(class) => {
+                // Same arity check for initializer
+                if args.len() != class.arity() {
+                    return Err(NZErrors::RuntimeError(
+                        paren.clone(),
+                        format!(
+                            "Expected {} arguments but got {}.",
+                            class.arity(),
+                            args.len()
+                        ),
+                    ));
+                }
+                class.call(self, &args)
+            }
+
+            _ => Err(NZErrors::RuntimeError(
+                paren.clone(),
+                "Can only call functions and classes.".to_string(),
+            )),
+        }
+    }
+
+    fn visit_get_expr(&mut self, object: &Expr, name: &Token) -> Result<Object, NZErrors> {
+        let object = self.evaluate(object)?;
+        if let Object::Instance(instance) = object {
+            instance.borrow().get(name)
+        } else {
+            Err(NZErrors::RuntimeError(
+                name.clone(),
+                "Only instances have properties.".to_string(),
+            ))
+        }
+    }
+
+    fn visit_set_expr(
+        &mut self,
+        object: &Expr,
+        name: &Token,
+        value: &Expr,
+    ) -> Result<Object, NZErrors> {
+        let object = self.evaluate(object)?;
+        if let Object::Instance(instance) = object {
+            let value = self.evaluate(value)?;
+            instance.borrow_mut().set(name, value.clone());
+            Ok(value)
+        } else {
+            Err(NZErrors::RuntimeError(
+                name.clone(),
+                "Only instances have fields.".to_string(),
+            ))
+        }
+    }
+
+    fn visit_this_expr(&mut self, name: &Token) -> Result<Object, NZErrors> {
+        self.environment.borrow().get(name)
+    }
+
+    fn visit_super_expr(&mut self, name: &Token, method: &Token) -> Result<Object, NZErrors> {
+        // Look up "super" from the environment
+        let superclass = self.environment.borrow().get(name)?;
+        let superclass = match superclass {
+            Object::Class(ref klass) => klass.clone(),
+            _ => {
+                return Err(NZErrors::RuntimeError(
+                    name.clone(),
+                    "Superclass must be a class.".to_string(),
+                ));
+            }
+        };
+
+        // "this" is always one environment closer than "super"
+        let instance = self.environment.borrow().get_at(1, "this");
+        let instance = match instance {
+            Some(Object::Instance(ref inst)) => inst.clone(),
+            _ => {
+                return Err(NZErrors::RuntimeError(
+                    name.clone(),
+                    "Couldn't find 'this' instance.".to_string(),
+                ));
+            }
+        };
+
+        // Find method in superclass
+        if let Some(method_func) = superclass.find_method(&method.lexeme) {
+            // Bind method to current instance
+            let bound = method_func.borrow().bind(instance);
+            return Ok(Object::Callable(Rc::new(bound)));
         }
 
         Err(NZErrors::RuntimeError(
-            paren.clone(),
-            "Can only call functions and classes.".to_string(),
+            method.clone(),
+            format!("Undefined property '{}'.", method.lexeme),
         ))
     }
 }
@@ -378,6 +471,7 @@ impl StmtVisitor<Result<(), NZErrors>> for Interpreter {
             params.to_vec(),
             body.to_vec(),
             self.environment.clone(),
+            false,
         );
         self.environment
             .borrow_mut()
@@ -395,5 +489,72 @@ impl StmtVisitor<Result<(), NZErrors>> for Interpreter {
             None => Object::Nill,
         };
         Err(NZErrors::Return(value))
+    }
+
+    fn visit_class_stmt(
+        &mut self,
+        name: &Token,
+        superclass: &Option<Expr>,
+        methods: &[Stmt],
+    ) -> Result<(), NZErrors> {
+        // Step 1: evaluate superclass if present
+        let superklass = if let Some(expr) = superclass {
+            let eval = self.evaluate(expr)?;
+            if let Object::Class(class) = eval {
+                Some(class)
+            } else {
+                return Err(NZErrors::RuntimeError(
+                    name.clone(),
+                    "Superclass must be a class.".to_string(),
+                ));
+            }
+        } else {
+            None
+        };
+
+        // Step 2: predeclare the class name in current environment
+        self.environment
+            .borrow_mut()
+            .define(name.lexeme.clone(), Object::Nill);
+
+        // Step 3: if there’s a superclass, create a new environment and bind "super"
+        let enclosing_env = self.environment.clone();
+        if let Some(ref superklass) = superklass {
+            let super_env = Environment::new(Some(enclosing_env.clone()));
+            super_env
+                .borrow_mut()
+                .define("super".to_string(), Object::Class(superklass.clone()));
+            self.environment = super_env;
+        }
+
+        // Step 4: collect methods
+        let mut meth = HashMap::new();
+        for method in methods {
+            if let Stmt::Function { name, params, body } = method {
+                let function = LoxFunction::new(
+                    name.clone(),
+                    params.to_vec(),
+                    body.to_vec(),
+                    self.environment.clone(), // closure sees "super"
+                    name.lexeme == "init",
+                );
+                meth.insert(name.lexeme.clone(), Rc::new(RefCell::new(function)));
+            }
+        }
+
+        // Step 5: build class object
+        let class = LoxClass::new(name.clone(), superklass.clone(), meth);
+
+        // Step 6: restore environment if "super" was introduced
+        if superclass.is_some() {
+            self.environment = enclosing_env;
+        }
+
+        // Step 7: assign the class object to its name
+        self.environment
+            .borrow_mut()
+            .assign(name, Object::Class(Rc::new(class)))?;
+
+        Ok(())
     }
 }

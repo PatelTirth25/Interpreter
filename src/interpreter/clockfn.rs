@@ -2,7 +2,7 @@ use crate::{error::NZErrors, object::Object, token::Token};
 
 use super::{loxcallable::LoxCallable, Interpreter};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ClockFn;
 
 impl LoxCallable for ClockFn {

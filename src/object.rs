@@ -1,16 +1,16 @@
 use core::fmt;
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
-use crate::interpreter::loxcallable::LoxCallable;
+use crate::interpreter::{loxcallable::LoxCallable, loxclass::LoxClass, loxinstance::LoxInstance};
 
 #[derive(Clone, Debug)]
 pub enum Object {
-    // Class(Rc<RefCell<LoxClass>>),
-    // Instance(Rc<RefCell<LoxInstance>>),
     Number(f64),
     Boolean(bool),
     String(String),
     Callable(Rc<dyn LoxCallable>),
+    Class(Rc<LoxClass>),
+    Instance(Rc<RefCell<LoxInstance>>),
     Nill,
 }
 
@@ -22,6 +22,8 @@ impl fmt::Display for Object {
             Object::Boolean(b) => write!(f, "{}", b),
             Object::String(s) => write!(f, "{}", s),
             Object::Callable(c) => write!(f, "{}", c),
+            Object::Instance(i) => write!(f, "{}", i.borrow()),
+            Object::Class(c) => write!(f, "{}", c),
         }
     }
 }

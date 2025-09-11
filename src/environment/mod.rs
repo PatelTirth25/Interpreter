@@ -2,9 +2,9 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{error::NZErrors, object::Object, token::Token};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Environment {
-    enclosing: Option<Rc<RefCell<Environment>>>,
+    pub enclosing: Option<Rc<RefCell<Environment>>>,
     hashmap: HashMap<String, Object>,
 }
 
@@ -48,5 +48,28 @@ impl Environment {
                 ))
             }
         }
+    }
+
+    pub fn get_at(&self, distance: usize, name: &str) -> Option<Object> {
+        Environment::ancestor(Rc::new(RefCell::new(self.clone())), distance)
+            .and_then(|env| env.borrow().hashmap.get(name).cloned())
+    }
+
+    pub fn ancestor(
+        env: Rc<RefCell<Environment>>,
+        mut distance: usize,
+    ) -> Option<Rc<RefCell<Environment>>> {
+        let mut environment = Rc::clone(&env);
+
+        while distance > 0 {
+            let parent_opt = environment.borrow().enclosing.clone();
+            match parent_opt {
+                Some(parent) => environment = parent,
+                None => return None,
+            }
+            distance -= 1;
+        }
+
+        Some(environment)
     }
 }
